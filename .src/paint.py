@@ -69,6 +69,27 @@ class PaintApp:
             transforms.Normalize((0.5,), (0.5,))  # Нормализация (подстраивайте под вашу модель)
         ])
 
+        # Словарь для отображения символов
+        self.symbol_map = {
+            '=': '=',
+            'add': '+',
+            'divide': '/',
+            'eight': '8',
+            'five': '5',
+            'four': '4',
+            'gt': '>',
+            'lt': '<',
+            'multiply': '*',
+            'nine': '9',
+            'one': '1',
+            'seven': '7',
+            'six': '6',
+            'subtract': '-',
+            'three': '3',
+            'two': '2',
+            'zero': '0'
+        }
+
     # Функция настройки меню
     def setup_menu(self):
         menu = tk.Menu(self.root)
@@ -145,20 +166,20 @@ class PaintApp:
         print("Изображение сохранено как output.png")
 
     def recognize(self):
-        # Трансформации для изображений
-        transform = transforms.Compose([
-            transforms.Grayscale(num_output_channels=1), #преобразование в оттенки серого
-            transforms.Resize((28, 14)), #28х28 пикселей
-            transforms.ToTensor(), #перевод в тензоры
-            transforms.Normalize((0.5,), (0.5,)) #нормализовка изображения
-        ])
-        train_dataset = datasets.ImageFolder('final_symbols_split_ttv/train', transform=transform)
-        class_labels = train_dataset.classes
+        # # Трансформации для изображений
+        # transform = transforms.Compose([
+        #     transforms.Grayscale(num_output_channels=1), #преобразование в оттенки серого
+        #     transforms.Resize((28, 14)), #28х28 пикселей
+        #     transforms.ToTensor(), #перевод в тензоры
+        #     transforms.Normalize((0.5,), (0.5,)) #нормализовка изображения
+        # ])
+        # train_dataset = datasets.ImageFolder('final_symbols_split_ttv/train', transform=transform)
+        # class_labels = train_dataset.classes
 
         self.save_image()  # Сначала сохраняем текущее изображение
         image = Image.open("output.png")
-        resized_image = image.resize((28, 14))
-        resized_image.show()
+        # resized_image = image.resize((28, 14))
+        # resized_image.show()
         symbols = ['=', 'add', 'divide', 'eight', 'five', 'four', 'gt', 'lt', 'multiply', 'nine', 'one', 'seven', 'six', 'subtract', 'three', 'two', 'zero']
         print("Исходное изображение:", image.size)  # Отладочный вывод размера изображения
         image = self.transform(image).unsqueeze(0)  # Преобразуем изображение для модели
@@ -167,11 +188,12 @@ class PaintApp:
         print("Выход модели:", output)  # Отладочный вывод выхода модели
         _, predicted = torch.max(output, 1)
         recognized_symbol = symbols[predicted.item()]
-        print("Распознанное выражение:", predicted.item(), class_labels[predicted.item()])
+        print("Распознанное выражение:", predicted.item(), symbols[predicted.item()])
 
-        self.expression.append(recognized_symbol)
+        self.expression.append(self.symbol_map[recognized_symbol])
         self.clear_canvas()
         self.update_expression()
+
 
     def update_expression(self):
         expression_str = " ".join(self.expression)
