@@ -16,8 +16,8 @@ class PaintApp:
         screen_height = self.root.winfo_screenheight()
 
         # Установка размеров окна и холста
-        self.canvas_width = screen_width - 100  # Немного меньше размера экрана
-        self.canvas_height = screen_height - 100  # Немного меньше размера экрана
+        self.canvas_width = 200  # Немного меньше размера экрана
+        self.canvas_height = 200  # Немного меньше размера экрана
 
         self.brush_size = 10
         self.brush_color = "blue"
@@ -37,10 +37,12 @@ class PaintApp:
         self.previous_x, self.previous_y = None, None  # Инициализируем предыдущие координаты
         self.action = []
 
+        self.expression = []
+
         self.setup_menu()
 
          # Бинды для горячих клавиш
-        self.root.bind("<Control-z>", self.undo)
+        # self.root.bind("<Control-z>", self.undo)
         self.root.bind("<Control-s>", self.save_image)
         self.root.bind("<Control-c>", self.clear_canvas)
 
@@ -62,7 +64,7 @@ class PaintApp:
         # Преобразования изображения
         self.transform = transforms.Compose([
             transforms.Grayscale(),  # Преобразование изображения в оттенки серого (если нужно)
-            transforms.Resize((28, 28)),  # Изменение размера изображения (подстраивайте под вашу модель)
+            transforms.Resize((28, 14)),  # Изменение размера изображения (подстраивайте под вашу модель)
             transforms.ToTensor(),  # Преобразование в тензор
             transforms.Normalize((0.5,), (0.5,))  # Нормализация (подстраивайте под вашу модель)
         ])
@@ -116,26 +118,26 @@ class PaintApp:
         self.previous_x, self.previous_y = None, None
         self.actions = []  # Очищаем стек действий
 
-    def undo(self, event=None):
-        if self.actions:
-            last_action = self.actions.pop()
-            self.canvas.delete(last_action)
-            # Обновляем изображение
-            self.image = Image.new("RGB", (self.canvas_width, self.canvas_height), "white")
-            self.draw = ImageDraw.Draw(self.image)
-            # Перерисовываем все действия
-            for action in self.actions:
-                coords = self.canvas.coords(action)
-                self.draw.line(coords, fill=self.brush_color, width=self.brush_size)
+    # def undo(self, event=None):
+    #     if self.actions:
+    #         last_action = self.actions.pop()
+    #         self.canvas.delete(last_action)
+    #         # Обновляем изображение
+    #         self.image = Image.new("RGB", (self.canvas_width, self.canvas_height), "white")
+    #         self.draw = ImageDraw.Draw(self.image)
+    #         # Перерисовываем все действия
+    #         for action in self.actions:
+    #             coords = self.canvas.coords(action)
+    #             self.draw.line(coords, fill=self.brush_color, width=self.brush_size)
     
-    def redraw_canvas(self):
-        self.canvas.delete("all")
-        self.image = Image.new("RGB", (self.canvas_width, self.canvas_height), "white")
-        self.draw = ImageDraw.Draw(self.image)
-        # Перерисовываем все действия из стека
-        for line_coords in self.actions:
-            self.canvas.create_line(*line_coords, fill=self.brush_color, width=self.brush_size)
-            self.draw.line(line_coords, fill=self.brush_color, width=self.brush_size)
+    # def redraw_canvas(self):
+    #     self.canvas.delete("all")
+    #     self.image = Image.new("RGB", (self.canvas_width, self.canvas_height), "white")
+    #     self.draw = ImageDraw.Draw(self.image)
+    #     # Перерисовываем все действия из стека
+    #     for line_coords in self.actions:
+    #         self.canvas.create_line(*line_coords, fill=self.brush_color, width=self.brush_size)
+    #         self.draw.line(line_coords, fill=self.brush_color, width=self.brush_size)
 
     
     def save_image(self, event=None):
@@ -146,7 +148,7 @@ class PaintApp:
         # Трансформации для изображений
         transform = transforms.Compose([
             transforms.Grayscale(num_output_channels=1), #преобразование в оттенки серого
-            transforms.Resize((28, 28)), #28х28 пикселей
+            transforms.Resize((28, 14)), #28х28 пикселей
             transforms.ToTensor(), #перевод в тензоры
             transforms.Normalize((0.5,), (0.5,)) #нормализовка изображения
         ])
@@ -155,13 +157,25 @@ class PaintApp:
 
         self.save_image()  # Сначала сохраняем текущее изображение
         image = Image.open("output.png")
+        resized_image = image.resize((28, 14))
+        resized_image.show()
+        symbols = ['=', 'add', 'divide', 'eight', 'five', 'four', 'gt', 'lt', 'multiply', 'nine', 'one', 'seven', 'six', 'subtract', 'three', 'two', 'zero']
         print("Исходное изображение:", image.size)  # Отладочный вывод размера изображения
         image = self.transform(image).unsqueeze(0)  # Преобразуем изображение для модели
         print("Преобразованное изображение:", image.shape)  # Отладочный вывод формы тензора
         output = self.model(image)
         print("Выход модели:", output)  # Отладочный вывод выхода модели
         _, predicted = torch.max(output, 1)
+        recognized_symbol = symbols[predicted.item()]
         print("Распознанное выражение:", predicted.item(), class_labels[predicted.item()])
+
+        self.expression.append(recognized_symbol)
+        self.clear_canvas()
+        self.update_expression()
+
+    def update_expression(self):
+        expression_str = " ".join(self.expression)
+        print("Текущее выражение:", expression_str)
 
 
 def run_paint_app():
