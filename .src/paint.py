@@ -5,6 +5,8 @@ import torch
 from torchvision import datasets, transforms
 import torchvision.models as models
 import torch.nn as nn
+from math_logic import update_math_expression
+import numpy as np
 
 class PaintApp:
     def __init__(self, root):
@@ -16,8 +18,8 @@ class PaintApp:
         screen_height = self.root.winfo_screenheight()
 
         # Установка размеров окна и холста
-        self.canvas_width = 200  # Немного меньше размера экрана
-        self.canvas_height = 200  # Немного меньше размера экрана
+        self.canvas_width = 200
+        self.canvas_height = 200
 
         self.brush_size = 10
         self.brush_color = "blue"
@@ -34,17 +36,17 @@ class PaintApp:
         self.image = Image.new("RGB", (self.canvas_width, self.canvas_height), "white")
         self.draw = ImageDraw.Draw(self.image)
 
-        self.previous_x, self.previous_y = None, None  # Инициализируем предыдущие координаты
-        self.action = []
-
+        self.previous_x, self.previous_y = None, None
         self.expression = []
+        self.line_points = []  # Для хранения точек линии
 
         self.setup_menu()
 
          # Бинды для горячих клавиш
-        # self.root.bind("<Control-z>", self.undo)
         self.root.bind("<Control-s>", self.save_image)
         self.root.bind("<Control-c>", self.clear_canvas)
+        self.root.bind("<Control-a>", self.recognize)
+        self.root.bind("<Control-z>", self.undo_last_symbol)
 
         # Загрузка предобученной модели ResNet18
         self.model = models.resnet18(pretrained=False)
@@ -56,7 +58,7 @@ class PaintApp:
         # Изменение последнего полностью связанного слоя для 17 классов
         self.model.fc = nn.Linear(self.num_ftrs, 17)
 
-        model_path = 'F:\pet2\pythonProject4\mode2l.pth'
+        model_path = '.src\mode2l.pth'
         # Загрузка сохранённых весов
         self.model.load_state_dict(torch.load(model_path))
         self.model.eval()  # Перевод модели в режим оценки
@@ -100,6 +102,8 @@ class PaintApp:
         file_menu.add_command(label="Clear", command=self.clear_canvas)  # Добавляем команду для очистки холста
         file_menu.add_command(label="Save", command=self.save_image)
         file_menu.add_command(label="Recognize", command=self.recognize)  # Добавляем команду для распознавания изображения
+        file_menu.add_command(label="Undo", command=self.undo_last_symbol)
+
 
         # Создаем подменю Brush
         brush_menu = tk.Menu(menu)
@@ -121,6 +125,7 @@ class PaintApp:
 
     def set_previous_coords(self, event):
         self.previous_x, self.previous_y = event.x, event.y
+        self.line_points = [(self.previous_x, self.previous_y)]
 
     def paint(self, event):
         if self.previous_x and self.previous_y:
@@ -138,48 +143,14 @@ class PaintApp:
         self.draw = ImageDraw.Draw(self.image)
         self.previous_x, self.previous_y = None, None
         self.actions = []  # Очищаем стек действий
-
-    # def undo(self, event=None):
-    #     if self.actions:
-    #         last_action = self.actions.pop()
-    #         self.canvas.delete(last_action)
-    #         # Обновляем изображение
-    #         self.image = Image.new("RGB", (self.canvas_width, self.canvas_height), "white")
-    #         self.draw = ImageDraw.Draw(self.image)
-    #         # Перерисовываем все действия
-    #         for action in self.actions:
-    #             coords = self.canvas.coords(action)
-    #             self.draw.line(coords, fill=self.brush_color, width=self.brush_size)
-    
-    # def redraw_canvas(self):
-    #     self.canvas.delete("all")
-    #     self.image = Image.new("RGB", (self.canvas_width, self.canvas_height), "white")
-    #     self.draw = ImageDraw.Draw(self.image)
-    #     # Перерисовываем все действия из стека
-    #     for line_coords in self.actions:
-    #         self.canvas.create_line(*line_coords, fill=self.brush_color, width=self.brush_size)
-    #         self.draw.line(line_coords, fill=self.brush_color, width=self.brush_size)
-
     
     def save_image(self, event=None):
         self.image.save("output.png")
         print("Изображение сохранено как output.png")
 
-    def recognize(self):
-        # # Трансформации для изображений
-        # transform = transforms.Compose([
-        #     transforms.Grayscale(num_output_channels=1), #преобразование в оттенки серого
-        #     transforms.Resize((28, 14)), #28х28 пикселей
-        #     transforms.ToTensor(), #перевод в тензоры
-        #     transforms.Normalize((0.5,), (0.5,)) #нормализовка изображения
-        # ])
-        # train_dataset = datasets.ImageFolder('final_symbols_split_ttv/train', transform=transform)
-        # class_labels = train_dataset.classes
-
+    def recognize(self, event=None):
         self.save_image()  # Сначала сохраняем текущее изображение
         image = Image.open("output.png")
-        # resized_image = image.resize((28, 14))
-        # resized_image.show()
         symbols = ['=', 'add', 'divide', 'eight', 'five', 'four', 'gt', 'lt', 'multiply', 'nine', 'one', 'seven', 'six', 'subtract', 'three', 'two', 'zero']
         print("Исходное изображение:", image.size)  # Отладочный вывод размера изображения
         image = self.transform(image).unsqueeze(0)  # Преобразуем изображение для модели
@@ -187,17 +158,25 @@ class PaintApp:
         output = self.model(image)
         print("Выход модели:", output)  # Отладочный вывод выхода модели
         _, predicted = torch.max(output, 1)
-        recognized_symbol = symbols[predicted.item()]
-        print("Распознанное выражение:", predicted.item(), symbols[predicted.item()])
-
-        self.expression.append(self.symbol_map[recognized_symbol])
+        recognized_symbol = self.symbol_map[predicted.item()]
+        print("Распознанное выражение:", predicted.item(), self.symbol_map[predicted.item()])
+    
+        self.expression, result = update_math_expression(self.expression, self.symbol_map[recognized_symbol])
         self.clear_canvas()
-        self.update_expression()
+        self.update_expression(result)
 
 
-    def update_expression(self):
+    def update_expression(self, result=None):
         expression_str = " ".join(self.expression)
         print("Текущее выражение:", expression_str)
+        if result is not None:
+            print("Результат текущего выражения:", result)
+
+    def undo_last_symbol(self, event=None):
+        if self.expression:
+            removed_symbol = self.expression.pop()
+            print(f"Удален последний символ: {removed_symbol}")
+            self.update_expression()
 
 
 def run_paint_app():
