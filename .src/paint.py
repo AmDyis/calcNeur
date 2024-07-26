@@ -6,7 +6,6 @@ from torchvision import datasets, transforms
 import torchvision.models as models
 import torch.nn as nn
 from math_logic import update_math_expression
-import numpy as np
 
 class PaintApp:
     def __init__(self, root):
@@ -18,15 +17,15 @@ class PaintApp:
         screen_height = self.root.winfo_screenheight()
 
         # Установка размеров окна и холста
-        self.canvas_width = 200
-        self.canvas_height = 200
+        self.canvas_width = 300
+        self.canvas_height = 300
 
         self.brush_size = 10
         self.brush_color = "blue"
 
         # Создание холста
-        self.canvas = tk.Canvas(self.root, bg = "white", width=self.canvas_width, height=self.canvas_height)
-        self.canvas.pack(fill=tk.BOTH, expand=True) # Ставим холст в окне
+        self.canvas = tk.Canvas(self.root, bg="white", width=self.canvas_width, height=self.canvas_height)
+        self.canvas.grid(row=0, column=0, padx=10, pady=10)
 
         # Привязываем рисование с зажатию лкм
                 # Привязываем события к методам
@@ -47,6 +46,11 @@ class PaintApp:
         self.root.bind("<Control-c>", self.clear_canvas)
         self.root.bind("<Control-a>", self.recognize)
         self.root.bind("<Control-z>", self.undo_last_symbol)
+
+        # Добавление виджета Text для вывода сообщений справа от холста
+        self.text_output = tk.Text(self.root, height=20, width=30, state=tk.DISABLED)
+        self.text_output.grid(row=0, column=1, padx=10, pady=10, sticky='ns')
+
 
         # Загрузка предобученной модели ResNet18
         self.model = models.resnet18(pretrained=False)
@@ -149,34 +153,49 @@ class PaintApp:
         print("Изображение сохранено как output.png")
 
     def recognize(self, event=None):
-        self.save_image()  # Сначала сохраняем текущее изображение
+        self.save_image()
         image = Image.open("output.png")
         symbols = ['=', 'add', 'divide', 'eight', 'five', 'four', 'gt', 'lt', 'multiply', 'nine', 'one', 'seven', 'six', 'subtract', 'three', 'two', 'zero']
-        print("Исходное изображение:", image.size)  # Отладочный вывод размера изображения
-        image = self.transform(image).unsqueeze(0)  # Преобразуем изображение для модели
-        print("Преобразованное изображение:", image.shape)  # Отладочный вывод формы тензора
+        print("Исходное изображение: " + str(image.size))
+        image = self.transform(image).unsqueeze(0)
+        print("Преобразованное изображение: " + str(image.shape))
         output = self.model(image)
-        print("Выход модели:", output)  # Отладочный вывод выхода модели
+        print("Выход модели: " + str(output))
         _, predicted = torch.max(output, 1)
-        recognized_symbol = self.symbol_map[predicted.item()]
-        print("Распознанное выражение:", predicted.item(), self.symbol_map[predicted.item()])
-    
+        recognized_symbol = symbols[predicted.item()]
+        print("Распознанное выражение: " + str(predicted.item()) + " " + symbols[predicted.item()])
+
         self.expression, result = update_math_expression(self.expression, self.symbol_map[recognized_symbol])
         self.clear_canvas()
-        self.update_expression(result)
+        self.update_expression()
 
 
-    def update_expression(self, result=None):
-        expression_str = " ".join(self.expression)
-        print("Текущее выражение:", expression_str)
         if result is not None:
-            print("Результат текущего выражения:", result)
+            self.log_to_text_output("Результат вычисления: " + str(result))
+
+    def update_expression(self):
+        expression_str = "".join(self.expression)
+        self.log_to_text_output("Текущее выражение: " + expression_str)
+
+    def log_to_text_output(self, message):
+        if hasattr(self, 'text_output'):
+            self.text_output.config(state=tk.NORMAL)
+            self.text_output.insert(tk.END, message + "\n")
+            self.text_output.config(state=tk.DISABLED)
+            self.text_output.yview(tk.END)
+
+    def clear_text_output(self):
+        if hasattr(self, 'text_output'):
+            self.text_output.config(state=tk.NORMAL)
+            self.text_output.delete(1.0, tk.END)
+            self.text_output.config(state=tk.DISABLED)
 
     def undo_last_symbol(self, event=None):
         if self.expression:
-            removed_symbol = self.expression.pop()
-            print(f"Удален последний символ: {removed_symbol}")
-            self.update_expression()
+            self.expression.pop()
+            self.log_to_text_output("Последний символ удален. Текущее выражение: " + "".join(self.expression))
+        else:
+            self.log_to_text_output("Нет символов для удаления.")
 
 
 def run_paint_app():
